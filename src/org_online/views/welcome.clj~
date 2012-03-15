@@ -1,0 +1,29 @@
+(ns org-online.views.welcome
+  (:require [org-online.views.common :as common]
+            [clojure.string :as string]
+            [noir.session :as session]
+            [noir.validation :as validation])
+  (:use [noir.core :only [defpage defpartial]]
+        hiccup.core
+        hiccup.form-helpers
+        hiccup.page-helpers))
+
+(defpartial error-text [errors]
+  [:p.validation-error (string/join "<br/>" errors)])
+
+(defpartial user-fields [{:keys [username password] :as usr}]
+  (text-field {:placeholder "Username"} :username username)
+  (password-field {:placeholder "Password"} :password password))
+
+(defpage "/login" []
+  (if (session/get :username)
+    (common/layout
+     [:p "Welcome"])
+    (common/layout
+     [:p "Please Log In"]
+     (form-to [:post "/login"]
+              [:h4 "Login"]
+              (validation/on-error :login error-text)
+              (user-fields {:username "" :password ""})
+              (submit-button {:class "submit"} "submit"))
+     )))
