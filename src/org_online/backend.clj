@@ -8,7 +8,7 @@
   (:import java.io.StringWriter))
 
 
-(def org-directories (atom []))
+(defonce org-directories (atom []))
 
 (defn add-org-directory [directory]
   (swap! org-directories conj (as-file directory)))
@@ -18,8 +18,6 @@
        (map #(.listFiles %))
        (apply concat)
        (filter #(re-seq #"org$" (.getName %)))))
-
-(def ^{:dynamic true} depth 0)
 
 (defn count-stars [line]
   (.length (first (re-seq #"\*+" line))))
@@ -69,7 +67,7 @@
       (doall
        (map process-lines (header-tree (line-seq *in*)))))))
 
-(def admin (atom nil))
+(defonce admin (atom nil))
 
 (defn save-state
   [output-file]
