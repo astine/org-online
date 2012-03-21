@@ -1,9 +1,9 @@
 (ns org-online.views.welcome
-  (:require [org-online.views.common :as common]
-            [clojure.string :as string]
+  (:require [clojure.string :as string]
             [noir.session :as session]
             [noir.validation :as validation])
   (:use org-online.backend
+        org-online.views.common
         [noir.core :only [defpage defpartial render]]
         [noir.response :only [redirect]]
         hiccup.core
@@ -17,15 +17,8 @@
   (text-field {:placeholder "Username"} :username username)
   (password-field {:placeholder "Password"} :password))
 
-(defpage "/welcome" []
-  (if (session/get :username)
-    (common/layout
-     [:p "Welcome."]
-     (form-to [:post "/logout"] (submit-button {:class "submit"} "Log Out")))
-    (redirect "/login")))
-
 (defpage "/login" {:as user}
-  (common/layout
+  (layout
    (if @admin
      [:p "Please Log In:"]
      [:p "Please Create Admin Account:"])
@@ -44,7 +37,7 @@
            (= (:password user) (:password @admin)))
     (do
       (session/put! :username (:username user))
-      (redirect "/welcome"))
+      (redirect "/index"))
     (do
       (validation/set-error :login "Wrong password.")
       (render "/login" user))))

@@ -1,0 +1,43 @@
+h1 {
+    font-size: 1.5em;
+}
+
+h2 {
+    font-size: 1.25em;
+}
+
+h3 {
+    font-size: 1.1em;
+}
+
+h4 {
+    font-size: 1.05em;
+}
+
+h5 {
+    font-size: 1.0em;
+}
+
+.foldable {
+    margin-left: 1em;
+}
+
+.depth-1 {
+    margin-left: 1em;
+}
+
+.depth-2 {
+    margin-left: 2em;
+}
+
+.depth-3 {
+    margin-left: 3em;
+}
+
+.depth-4 {
+    margin-left: 4em;
+}
+
+.depth-5 {
+    margin-left: 5em;
+}
