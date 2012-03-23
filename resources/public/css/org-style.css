@@ -22,6 +22,18 @@ h5 {
     margin-left: 1em;
 }
 
+.todo {
+    color: red;
+}
+
+.done {
+    color: green;
+}
+
+.tag {
+    color: purple;
+}
+
 .depth-1 {
     margin-left: 1em;
 }
