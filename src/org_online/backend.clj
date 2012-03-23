@@ -10,8 +10,15 @@
 
 (defonce org-directories (atom []))
 
+(def ^{:dynamic true} depth 0)
+
 (defn add-org-directory [directory]
   (swap! org-directories conj (as-file directory)))
+
+(defn load-directories-from-file [file]
+  (with-open [*in* (reader file)]
+    (doall
+     (map add-org-directory (line-seq *in*)))))
 
 (defn get-all-org-files []
   (->> @org-directories

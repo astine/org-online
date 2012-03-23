@@ -38,8 +38,11 @@
 (defonce ^{:documentation "The server handle through which the program can start or start the internal Jetty server."}
   server nil)
 
+(defonce ^{:documentation "The directory in which to look for config files."}
+  config-dir (as-file "./config"))
+
 (defn -main [& m]
-  (let [[{:keys [port mode directory prefix start-swank]} args banne]
+  (let [[{:keys [port mode config directory prefix start-swank]} args banne]
         (cli m
 	     ["-p" "--port" "The port to listen on" 
 	      :default (Integer. (get (System/getenv) "PORT" "8080")) 
@@ -47,6 +50,8 @@
 	     ["-m" "--mode" "The run mode" 
 	      :default :dev 
 	      :parse-fn keyword]
+             ["-c" "--config" "The directory to search for config files"
+              :default "./config"]
              ["-d" "--directory" "The directory to search for GTD files"
               :default "./"]
 	     ["-P" "--prefix" "The url prefix"]
@@ -56,7 +61,11 @@
     (when prefix
       (server/add-middleware wrap-uri-prefix prefix))
     (server/add-middleware wrap-request-logging)
-    (add-org-directory directory)
+    (when config
+      (def config-dir (as-file config)))
+    (when directory
+      (add-org-directory directory))
+    (load-directories-from-file (file config-dir "directories"))
     (def server (server/start port {:mode mode
                                     :ns 'org-online
                                     :base-url prefix}))))
