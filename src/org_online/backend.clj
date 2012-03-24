@@ -26,6 +26,10 @@
        (apply concat)
        (filter #(re-seq #"org$" (.getName %)))))
 
+(defonce todos (atom #{}))
+(defonce dones (atom #{}))
+(defonce tags (atom #{}))
+
 (defn count-stars [line]
   (.length (first (re-seq #"\*+" line))))
 
@@ -58,21 +62,66 @@
       (list prev (link-to address description) post)
       line)))
 
+(defn markup-tags [line]
+  (let [[[match prev tags post]]
+        (re-seq (re-pattern (str "(.*):(" (clojure.string/join "|" @tags) "):(.*)"))
+                line)]
+    (if match
+      (let [tags (clojure.string/split tag #":")]
+        (list prev (for [tag tags]
+                     [:span.tag tag]) post))
+        line)))
+
+(defn markup-todos [line]
+  (let [[[match prev todo post]]
+        (re-seq (re-pattern (str "(.*)("
+                                 (clojure.string/join
+                                  "|" (clojure.set/union @todos @dones))
+                                 ")(.*)"))
+                line)]
+    (if match
+      (if (@todos todo)
+        (list prev [:span.todo todo] (markup-tags post))
+        (list prev [:span.done todo] (markup-tags post)))
+      (markup-tags line))))
+
 (defn process-lines [lines]
   (if (string? lines)
     [:p (create-links lines)]
     (let [id (gensym "id")]
       [:div 
-       [(keyword (str "h" depth)) {:id (str "head-" id) :class "folder"}
-        (.substring (first lines) (count-stars (first lines)))]
+       [(keyword (str "h" (count-stars (first lines))))
+        {:id (str "head-" id) :class "folder"}
+        (markup-todos (.substring (first lines) (count-stars (first lines))))]
        [:div.foldable {:id (str "body-" id)}
         (map process-lines (rest lines))]])))
 
+(defn process-cfg-lines [lines]
+  (swap! todos (constantly #{}))
+  (swap! dones (constantly #{}))
+  (swap! tags (constantly #{}))
+  (doseq [[match key value]
+          (remove nil? (map #(re-matches #"\s*\#\+(\w+)\: (.*)" %) lines))]
+    (print key)
+    (condp re-seq key
+      #"TODO" (let [[todo done] (split-with #(not (re-seq #"\|" %))
+                                            (clojure.string/split value #" "))]
+                       (swap! todos clojure.set/union (set todo))
+                       (swap! dones clojure.set/union (set (rest done))))
+      #"(TAGS|tags)" (let [tag
+                           (remove nil? (map
+                                         (comp second #(re-matches #"(\w+).*" %))
+                                         (clojure.string/split value #"([ {}]+)")))]
+                       (swap! tags clojure.set/union (set tag)))
+      "default")))
+
+
 (defn convert-org-file-to-html [file]
-  (binding [depth 0]
-    (with-open [*in* (reader file)]
+  (with-open [*in* (reader file)]
+    (let [lines (line-seq *in*)]
+      (process-cfg-lines lines)
       (doall
-       (map process-lines (header-tree (line-seq *in*)))))))
+       (map process-lines (header-tree lines))))))
 
 (defonce admin (atom nil))
 
@@ -89,4 +138,4 @@
       (dosync
        (swap! admin (constantly (read *in*)))
        (swap! org-directories (constantly (vec (map as-file (read *in*)))))))
-    (save-state input-file)))
+    (save-state input-file)))(
