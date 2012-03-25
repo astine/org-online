@@ -41,6 +41,9 @@
 (defonce ^{:documentation "The directory in which to look for config files."}
   config-dir (as-file "./config"))
 
+(defonce ^{:documentation "The directory in which to look for data files."}
+  data-dir (as-file "./data"))
+
 (defn -main [& m]
   (let [[{:keys [port mode config directory prefix start-swank]} args banne]
         (cli m
@@ -66,6 +69,7 @@
     (when directory
       (add-org-directory directory))
     (load-directories-from-file (file config-dir "directories"))
+    (load-passwords-from-file (file data-dir "passwords"))
     (def server (server/start port {:mode mode
                                     :ns 'org-online
                                     :base-url prefix}))))

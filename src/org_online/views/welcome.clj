@@ -1,8 +1,10 @@
 (ns org-online.views.welcome
   (:require [clojure.string :as string]
             [noir.session :as session]
-            [noir.validation :as validation])
-  (:use org-online.backend
+            [noir.validation :as validation]
+            [noir.util.crypt :as crypt])
+  (:use clojure.java.io
+        org-online.backend
         org-online.views.common
         [noir.core :only [defpage defpartial render]]
         [noir.response :only [redirect]]
@@ -31,10 +33,13 @@
 (defpage [:post "/login"] {:as user}
   (when-not @admin
     (if (and (:username user) (:password user))
-      (swap! admin (constantly user))
+      (let [password (crypt/encrypt (crypt/gen-salt 12) (:password user))]
+        (swap! admin (constantly {:username (:username user)
+                                  :password password}))
+        (save-passwords-to-file (file "./data/passwords")))
       (validation/set-error :login (str "Invalid user: " user))))
   (if (and (= (:username user) (:username @admin))
-           (= (:password user) (:password @admin)))
+           (crypt/compare (:password user) (:password @admin)))
     (do
       (session/put! :username (:username user))
       (redirect "/index"))
