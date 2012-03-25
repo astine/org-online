@@ -1,3 +1,7 @@
+body {
+    max-width: 50em;
+}
+
 h1 {
     font-size: 1.5em;
 }
@@ -31,7 +35,9 @@ h5 {
 }
 
 .tag {
+    float: right;
     color: purple;
+    margin-left: 0.5em;
 }
 
 .depth-1 {
