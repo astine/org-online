@@ -6,8 +6,6 @@
                            [org.clojure/algo.generic "0.1.0"]
                            [clj-stacktrace "0.2.4"]
                            [noir "1.2.1"]
-                           [org.clojars.ghoseb/cron4j "2.2.1"]
-                           [inflections "0.6.5-SNAPSHOT"]
                            [ring-mock "0.1.1"]
                            [midje "1.3.1"]
                            [swank-clojure "1.4.0-SNAPSHOT"]]
