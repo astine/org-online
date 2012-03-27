@@ -1,4 +1,5 @@
 (ns org-online.server
+  (:gen-class)
   (:use org-online.backend
         clojure.tools.cli
         clojure.java.io)
@@ -59,8 +60,6 @@
               :default "./"]
 	     ["-P" "--prefix" "The url prefix"]
          ["-s" "---no-start-swank" "Don't Start Swank"])]
-    (if-not start-swank
-      (swank/start-repl "4009"))
     (when prefix
       (server/add-middleware wrap-uri-prefix prefix))
     (server/add-middleware wrap-request-logging)

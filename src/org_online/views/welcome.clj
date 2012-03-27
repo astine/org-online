@@ -19,6 +19,9 @@
   (text-field {:placeholder "Username"} :username username)
   (password-field {:placeholder "Password"} :password))
 
+(defpage "/" []
+  (render "/index"))
+
 (defpage "/login" {:as user}
   (layout
    (if @admin
