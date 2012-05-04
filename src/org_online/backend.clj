@@ -12,8 +12,6 @@
 
 (defonce org-directories (atom []))
 
-(def ^{:dynamic true} depth 0)
-
 (defn add-org-directory [directory]
   (swap! org-directories conj (as-file directory)))
 
@@ -27,10 +25,6 @@
        (map #(.listFiles %))
        (apply concat)
        (filter #(re-seq #"org$" (.getName %)))))
-
-(defonce todos (atom #{}))
-(defonce dones (atom #{}))
-(defonce tags (atom #{}))
 
 (defn count-stars [line]
   (.length (first (re-seq #"\*+" line))))
@@ -46,51 +40,38 @@
   (let [[[match prev tags post]]
         (re-seq #"(.* ):([\w:]+): *$" line)]
     (if match
-      (let [tags (clojure.string/split tags #":")]
+      (let [tags (string/split tags #":")]
         (list prev (for [tag tags]
                      [:span.tag tag]) post))
       line)))
 
-(defn markup-todos [line]
+(defn markup-todos [line {:keys [todos dones]}]
   (let [[[match prev todo post]]
         (re-seq (re-pattern (str "(.*)("
-                                 (clojure.string/join
-                                  "|" (union @todos @dones))
+                                 (string/join
+                                  "|" (union todos dones))
                                  ")(.*)"))
                 line)]
     (if match
-      (if (@todos todo)
+      (if (todos todo)
         (list prev [:span.todo todo] (markup-tags post))
         (list prev [:span.done todo] (markup-tags post)))
       (markup-tags line))))
 
-;(defn markup-lists [lines]
-  ;(for [sublist (partition-by #(re-seq #"^ [-+*] " %) lines)]
-    ;(if (re-seq #"^ [-+*] " (first sublist))
-      ;[:ul
-       ;(for [line sublist]
-         ;[:li (.substring line 3)])]
-      ;[:p
-       ;(for [line sublist]
-         ;[line [:br]])])))
-
 (defn process-cfg-lines [lines]
-  (swap! todos (constantly #{}))
-  (swap! dones (constantly #{}))
-  (swap! tags (constantly #{}))
-  (doseq [[match key value]
-          (remove nil? (map #(re-matches #"\s*\#\+(\w+)\: (.*)" %) lines))]
-    (condp re-seq key
-      #"TODO" (let [[todo done] (split-with #(not (re-seq #"\|" %))
-                                            (clojure.string/split value #" "))]
-                       (swap! todos union (set todo))
-                       (swap! dones union (set (rest done))))
-      ;#"(TAGS|tags)" (let [tag
-                           ;(remove nil? (map
-                                         ;(comp second #(re-matches #"(\w+).*" %))
-                                         ;(clojure.string/split value #"([ {}]+)")))]
-                       ;(swap! tags union (set tag)))
-      "default")))
+  (apply (partial merge-with union)
+         (for [[match key value]
+               (remove nil? (map #(re-matches #"\s*\#\+(\w+)\: (.*)" %) lines))]
+           (condp re-seq key
+             #"TODO" (let [[todos dones] (split-with #(not (re-seq #"\|" %))
+                                                     (string/split value #" "))]
+                       {:todos (set todos) :dones (set (rest dones))})
+             #"(TAGS|tags)" (let [tags
+                                  (remove nil? (map
+                                                (comp second #(re-matches #"(\w+).*" %))
+                                                (string/split value #"([ {}]+)")))]
+                              {:tags (set tags)})
+             {}))))
 
 (defonce admin (atom nil))
 
@@ -107,11 +88,22 @@
 ;; new fully functional version
 (declare next-line header-string parse-header)
 
-(defn next-line [lines {:keys [depth ids] :as state}]
+(defn properties-line [[line & rest] state]
+  (when line
+    (condp re-seq line
+      #":END:" (partial next-line rest state)
+      #":(.+):" (let [[[match label value]] (re-seq #":(.+):\s+(.+)" line)]
+                  (println (html [:span.property [:em label] (str ": " value)]))
+                  (partial properties-line rest state))
+      (partial properties-line rest state))))
+
+(defn next-line [lines {:keys [properties? depth ids] :as state}]
   (let [line (first lines)]
     (cond (nil? line)
           (doseq [index ids]
             (println "</div></div>"))
+          (re-seq #":PROPERTIES:" line)
+          (partial properties-line (rest lines) state)
           (re-seq #"^\*+ " line)
           (partial parse-header lines state)
           :else
@@ -119,12 +111,12 @@
             (println (html [:p (create-links line)]))
             (partial next-line (rest lines) state)))))
 
-(defn header-string [stars line id]
+(defn header-string [stars line id cfg]
   (html [(keyword (str "h" stars))
          {:id (str "head-" id) :class "folder"}
-         (markup-todos (.substring line stars))]))
+         (markup-todos (.substring line stars) cfg)]))
 
-(defn parse-header [lines {:keys [depth ids] :as state}]
+(defn parse-header [lines {:keys [depth ids cfg] :as state}]
   (let [line (first lines)
         stars (count-stars line)
         id (gensym)
@@ -132,21 +124,21 @@
     (doseq [index (range closings)]
       (println "</div></div>"))
     (println "<div>")
-    (println (header-string stars line id))
+    (println (header-string stars line id cfg))
     (println (str "<div class=\"foldable\" id=\"body-" id "\">"))
     (partial next-line (rest lines)
              (assoc state
                :depth stars
                :ids (cons id (drop closings ids))))))
 
-(defn first-lines [lines]
-  (partial next-line lines {:depth 0}))
+(defn first-lines [lines state]
+  (partial next-line lines (assoc state :depth 0)))
 
 (defn convert-org-file-to-html [file]
   (with-open [output (StringWriter.)]
     (with-open [input (reader file)]
       (binding [*out* output]
-        (let [lines (line-seq input)]
-          (process-cfg-lines lines)
-          (trampoline first-lines lines)))
+        (let [lines (line-seq input)
+              cfg (process-cfg-lines lines)]
+          (trampoline first-lines lines {:cfg cfg})))
       (.toString output))))
