@@ -35,29 +35,6 @@
 (defn count-stars [line]
   (.length (first (re-seq #"\*+" line))))
 
-(defn paste-in-tree [tree paste depth]
-  (if (zero? depth)
-    (concat tree paste)
-    (concat (butlast tree) [(paste-in-tree (last tree) paste (dec depth))])))
-
-(defn header-tree [lines & [tree depth]]
-  (let [[prev [header & rest]] (split-with #(not (re-seq #"^\*+ " %)) lines)
-        depth (or depth 0)]
-    (cond (nil? header)
-          (paste-in-tree tree prev depth)
-          (> (count-stars header) depth)
-          (header-tree rest (paste-in-tree tree (concat prev [[header]]) depth)
-                       (count-stars header))
-          (< (count-stars header) depth)
-          (header-tree rest (paste-in-tree (paste-in-tree tree prev depth)
-                                           [[header]] (dec (count-stars header)))
-                       (count-stars header))
-          (= (count-stars header) depth)
-          (header-tree rest (paste-in-tree (paste-in-tree tree prev depth)
-                                           [[header]] (dec depth))
-                       depth)
-          )))
-
 (defn create-links [line]
   (let [[[match prev address description post]]
         (re-seq #"(.*)\[\[(.+)\]\[(.+)\]\](.*)" line)]
@@ -96,20 +73,6 @@
       ;[:p
        ;(for [line sublist]
          ;[line [:br]])])))
-             
-(defn process-lines [lines]
-  (cond (string? lines)
-        [:p (create-links lines)]
-        (vector? lines)
-        lines
-        :default
-        (let [id (gensym "id")]
-          [:div 
-           [(keyword (str "h" (count-stars (first lines))))
-            {:id (str "head-" id) :class "folder"}
-            (markup-todos (.substring (first lines) (count-stars (first lines))))]
-           [:div.foldable {:id (str "body-" id)}
-            (map process-lines (rest lines))]]))) 
 
 (defn process-cfg-lines [lines]
   (swap! todos (constantly #{}))
@@ -122,20 +85,14 @@
                                             (clojure.string/split value #" "))]
                        (swap! todos union (set todo))
                        (swap! dones union (set (rest done))))
-      #"(TAGS|tags)" (let [tag
-                           (remove nil? (map
-                                         (comp second #(re-matches #"(\w+).*" %))
-                                         (clojure.string/split value #"([ {}]+)")))]
-                       (swap! tags union (set tag)))
+      ;#"(TAGS|tags)" (let [tag
+                           ;(remove nil? (map
+                                         ;(comp second #(re-matches #"(\w+).*" %))
+                                         ;(clojure.string/split value #"([ {}]+)")))]
+                       ;(swap! tags union (set tag)))
       "default")))
 
 
-(defn convert-org-file-to-html [file]
-  (with-open [*in* (reader file)]
-    (let [lines (line-seq *in*)]
-      (process-cfg-lines lines)
-      (doall
-       (map process-lines (header-tree lines))))))
 
 (defonce admin (atom nil))
 
@@ -150,7 +107,7 @@
       (dosync
        (swap! admin (constantly (read *in*)))
        (swap! org-directories (constantly (vec (map as-file (read *in*)))))))
-    (save-state input-file)))
+    (save-state file)))
 
 ;; new fully functional version
 (declare next-line header-string parse-header)
@@ -158,11 +115,8 @@
 (defn next-line [lines {:keys [depth ids] :as state}]
   (let [line (first lines)]
     (cond (nil? line)
-          (do
-            (doseq [index ids]
-              (println "</div></div>"))
-            (println "</body>")
-            (println "</html>"))
+          (doseq [index ids]
+            (println "</div></div>"))
           (re-seq #"^\*+ " line)
           (partial parse-header lines state)
           :else
@@ -181,8 +135,7 @@
         id (gensym)
         closings (inc (- depth stars))]
     (doseq [index (range closings)]
-      (println "</div>")
-      (println "</div>"))
+      (println "</div></div>"))
     (println "<div>")
     (println (header-string stars line id))
     (println (str "<div class=\"foldable\" id=\"body-" id "\">"))
@@ -192,20 +145,13 @@
                :ids (cons id (drop closings ids))))))
 
 (defn first-lines [lines]
-  (println "<!DOCTYPE html PUBLIC '-//W3C//DTD XHTML 1.0 Strict//EN' 'http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd'>")
-  (println "<html xmlns='http://www.w3.org/1999/xhtml'>")
-  (println (html [:head
-                  [:title "org-online"]
-                  (include-css "css/reset.css"
-                               "css/org-style.css")
-                  (include-js "js/jquery.js"
-                              "js/jquery-ui.js"
-                              "js/app.js")]))
-  (println "<body>")
   (partial next-line lines {:depth 0}))
 
-(defn parse-org-file [file output]
-  (binding [*out* output]
-    (let [lines (line-seq file)]
-      (process-cfg-lines lines)
-      (trampoline first-lines lines))))
+(defn convert-org-file-to-html [file]
+  (with-open [output (StringWriter.)]
+    (with-open [input (reader file)]
+      (binding [*out* output]
+        (let [lines (line-seq input)]
+          (process-cfg-lines lines)
+          (trampoline first-lines lines)))
+      (.toString output))))
