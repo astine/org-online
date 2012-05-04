@@ -60,7 +60,7 @@
         (re-seq (re-pattern (str "(.*):(" (clojure.string/join "|" @tags) "):(.*)"))
                 line)]
     (if match
-      (let [tags (clojure.string/split tag #":")]
+      (let [tags (clojure.string/split tags #":")]
         (list prev (for [tag tags]
                      [:span.tag tag]) post))
         line)))
@@ -131,4 +131,62 @@
       (dosync
        (swap! admin (constantly (read *in*)))
        (swap! org-directories (constantly (vec (map as-file (read *in*)))))))
-    (save-state input-file)))(
+    (save-state input-file)))
+
+;; new fully functional version
+(declare next-line header-string parse-header)
+
+(defn next-line [lines {:keys [depth ids] :as state}]
+  (let [line (first lines)]
+    (cond (nil? line)
+          (do
+            (doseq [index ids]
+              (println "</div></div>"))
+            (println "</body>")
+            (println "</html>"))
+          (re-seq #"^\*+ " line)
+          (partial parse-header lines state)
+          :else
+          (do
+            (println (html [:p (create-links line)]))
+            (partial next-line (rest lines) state)))))
+
+(defn header-string [stars line id]
+  (html [(keyword (str "h" stars))
+         {:id (str "head-" id) :class "folder"}
+         (markup-todos (.substring line stars))]))
+
+(defn parse-header [lines {:keys [depth ids] :as state}]
+  (let [line (first lines)
+        stars (count-stars line)
+        id (gensym)
+        closings (inc (- depth stars))]
+    (doseq [index (range closings)]
+      (println "</div>")
+      (println "</div>"))
+    (println "<div>")
+    (println (header-string stars line id))
+    (println (str "<div class=\"foldable\" id=\"body-" id "\">"))
+    (partial next-line (rest lines)
+             (assoc state
+               :depth stars
+               :ids (cons id (drop closings ids))))))
+
+(defn first-lines [lines]
+  (println "<!DOCTYPE html PUBLIC '-//W3C//DTD XHTML 1.0 Strict//EN' 'http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd'>")
+  (println "<html xmlns='http://www.w3.org/1999/xhtml'>")
+  (println (html [:head
+                  [:title "org-online"]
+                  (include-css "css/reset.css"
+                               "css/org-style.css")
+                  (include-js "js/jquery.js"
+                              "js/jquery-ui.js"
+                              "js/app.js")]))
+  (println "<body>")
+  (partial next-line lines {:depth 0}))
+
+(defn parse-org-file [file output]
+  (binding [*out* output]
+    (let [lines (line-seq file)]
+      (process-cfg-lines lines)
+      (trampoline first-lines lines))))
