@@ -92,10 +92,7 @@
                        ;(swap! tags union (set tag)))
       "default")))
 
-
-
 (defonce admin (atom nil))
-
 
 (defn save-passwords-to-file [file]
   (with-open [*out* (writer file)]
@@ -105,9 +102,7 @@
   (when (.exists (as-file file))
     (with-open [*in* (java.io.PushbackReader. (reader file))]
       (dosync
-       (swap! admin (constantly (read *in*)))
-       (swap! org-directories (constantly (vec (map as-file (read *in*)))))))
-    (save-state file)))
+       (swap! admin (constantly (read *in*)))))))
 
 ;; new fully functional version
 (declare next-line header-string parse-header)
