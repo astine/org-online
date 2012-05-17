@@ -2,6 +2,10 @@ body {
     max-width: 50em;
 }
 
+ul {
+    padding-left: 1em;
+}
+
 h1 {
     font-size: 1.5em;
 }

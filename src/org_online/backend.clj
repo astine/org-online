@@ -86,10 +86,62 @@
        (swap! admin (constantly (read *in*)))))))
 
 ;; new fully functional version
-(declare next-line header-string parse-header)
+(declare next-line header-string parse-header list-line)
 
+(defn end-lines [{:keys [ids] :as state}]
+  (doseq [id ids]
+    (println "</div></div>")))
+
+(defmacro handle-end-lines [[line state] & body]
+  `(if-not (nil? ~line)
+     (do ~@body)
+     (partial end-lines ~state)))
+
+(defn ulist-line [[line & tail] {:keys [indents] :as state}]
+  (handle-end-lines [line state]
+    (let [[[match spaces bullet text]]
+          (re-seq #"^(\s*)([+*-]?)\s*(.*)" line)
+          line-indent (count spaces)]
+      (cond (and (zero? line-indent)
+                 (= bullet "*"))
+            (do
+              (doseq [i indents]
+                (println "</li>")
+                (println "</ul>"))
+              (partial next-line (cons line tail) (dissoc state :indents)))
+            (and (empty? indents)
+                 (= bullet ""))
+            (partial next-line (cons line tail) state)
+            (and (#{"*" "+" "-"} bullet)
+                 (or (empty? indents)
+                     (> line-indent (first indents))))
+            (do
+              (println "<ul>")
+              (println "<li>")
+              (println (html (create-links text)))
+              (println "<br/>")
+              (partial ulist-line tail (assoc state :indents (cons line-indent indents))))
+            (and (#{"*" "+" "-"} bullet)
+                 (= line-indent (first indents)))
+            (do
+              (println "</li>")
+              (println "<li>")
+              (println (html (create-links text)))
+              (println "<br/>")
+              (partial ulist-line tail (assoc state :indents (cons line-indent (rest indents)))))
+            (<= line-indent (first indents))
+            (do
+              (println "</li>")
+              (println "</ul>")
+              (partial ulist-line (cons line tail) (assoc state :indents (rest indents))))
+            (> line-indent (first indents))
+            (do
+              (println (html (create-links text)))
+              (println "<br/>")
+              (partial ulist-line tail state))))))
+ 
 (defn properties-line [[line & rest] state]
-  (when line
+  (handle-end-lines [line state]
     (condp re-seq line
       #":END:" (partial next-line rest state)
       #":(.+):" (let [[[match label value]] (re-seq #":(.+):\s+(.+)" line)]
@@ -97,28 +149,23 @@
                   (partial properties-line rest state))
       (partial properties-line rest state))))
 
-(defn next-line [lines {:keys [properties? depth ids] :as state}]
-  (let [line (first lines)]
-    (cond (nil? line)
-          (doseq [index ids]
-            (println "</div></div>"))
-          (re-seq #":PROPERTIES:" line)
-          (partial properties-line (rest lines) state)
-          (re-seq #"^\*+ " line)
-          (partial parse-header lines state)
-          :else
-          (do
-            (println (html [:p (create-links line)]))
-            (partial next-line (rest lines) state)))))
+(defn next-line [[line & rest] {:keys [properties? depth] :as state}]
+  (handle-end-lines [line state]
+    (condp re-seq line 
+      #":PROPERTIES:" (partial properties-line rest state)
+      #"^\*+ " (partial parse-header (cons line rest) state)
+      #"^(\s+[+*-] |[+-] )" (partial ulist-line (cons line rest) state)
+      (do
+        (println (html [:p (create-links line)]))
+        (partial next-line rest state)))))
 
 (defn header-string [stars line id cfg]
   (html [(keyword (str "h" stars))
          {:id (str "head-" id) :class "folder"}
          (markup-todos (.substring line stars) cfg)]))
 
-(defn parse-header [lines {:keys [depth ids cfg] :as state}]
-  (let [line (first lines)
-        stars (count-stars line)
+(defn parse-header [[line & rest] {:keys [depth ids cfg] :as state}]
+  (let [stars (count-stars line)
         id (gensym)
         closings (inc (- depth stars))]
     (doseq [index (range closings)]
@@ -126,7 +173,7 @@
     (println "<div>")
     (println (header-string stars line id cfg))
     (println (str "<div class=\"foldable\" id=\"body-" id "\">"))
-    (partial next-line (rest lines)
+    (partial next-line rest
              (assoc state
                :depth stars
                :ids (cons id (drop closings ids))))))
