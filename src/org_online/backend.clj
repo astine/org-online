@@ -36,6 +36,13 @@
       (list prev (link-to address description) post)
       line)))
 
+(defn create-checkbox [line]
+  (let [[[match mark tail]]
+        (re-seq #"^\[([\sX-])\](.*)" line)]
+    (if match
+      (list (check-box "" (= mark "X")) tail)
+      line)))
+
 (defn markup-tags [line]
   (let [[[match prev tags post]]
         (re-seq #"(.* ):([\w:]+): *$" line)]
@@ -118,7 +125,7 @@
             (do
               (println "<ul>")
               (println "<li>")
-              (println (html (create-links text)))
+              (println (html (map #(if (string? %) (create-links %) %) (create-checkbox text))))
               (println "<br/>")
               (partial ulist-line tail (assoc state :indents (cons line-indent indents))))
             (and (#{"*" "+" "-"} bullet)
@@ -126,7 +133,7 @@
             (do
               (println "</li>")
               (println "<li>")
-              (println (html (create-links text)))
+              (println (html (map #(if (string? %) (create-links %) %) (create-checkbox text))))
               (println "<br/>")
               (partial ulist-line tail (assoc state :indents (cons line-indent (rest indents)))))
             (<= line-indent (first indents))
