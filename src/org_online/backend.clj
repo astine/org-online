@@ -93,7 +93,7 @@
        (swap! admin (constantly (read *in*)))))))
 
 ;; new fully functional version
-(declare next-line header-string parse-header list-line)
+(declare next-line header-string parse-header ulist-line)
 
 (defn end-lines [{:keys [ids] :as state}]
   (doseq [id ids]
